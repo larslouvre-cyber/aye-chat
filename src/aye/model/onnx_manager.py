@@ -32,13 +32,21 @@ def get_model_status():
                 _status = "NOT_DOWNLOADED"
         return _status
 
-import chromadb
-from chromadb.utils import embedding_functions
+try:
+    import chromadb
+    from chromadb.utils import embedding_functions
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
 
 # this artificial workaround is to trigger the download of a model
 # in our environment: for some reason, regular things like 
 # ONNXMiniLM_L6_V2() invocation does not work.
 def download_onnx():
+    if not CHROMADB_AVAILABLE:
+        print("ChromaDB not available, skipping ONNX model download")
+        return
+        
     print("Preparing the system...")
     client = chromadb.Client()
     ef = embedding_functions.DefaultEmbeddingFunction()
@@ -51,6 +59,9 @@ def download_onnx():
 
 def _download_model_sync():
     """Blocking function to download the model and create a flag file on success."""
+    if not CHROMADB_AVAILABLE:
+        return
+        
     global _status
     from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
     from aye.model.vector_db import suppress_stdout_stderr
