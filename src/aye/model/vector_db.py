@@ -10,9 +10,14 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Dict, Any
 
-import chromadb
-# Use the lightweight ONNX embedding function included with chromadb
-from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+try:
+    import chromadb
+    # Use the lightweight ONNX embedding function included with chromadb
+    from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: chromadb not available. Vector database features will be disabled.")
 
 from aye.model.models import VectorIndexResult
 from aye.model.ast_chunker import ast_chunker, get_language_from_file_path
@@ -43,6 +48,9 @@ def initialize_index(root_path: Path) -> Any:
     Returns:
         The ChromaDB collection object, ready for use.
     """
+    if not CHROMADB_AVAILABLE:
+        return None
+    
     db_path = root_path / ".aye" / "chroma_db"
     db_path.mkdir(parents=True, exist_ok=True)
 
@@ -89,7 +97,7 @@ def update_index_coarse(
     Performs a coarse, file-per-chunk update to the index.
     The document ID is the file path itself. This is for the fast, initial pass.
     """
-    if not files_to_update:
+    if not collection or not files_to_update:
         return
 
     ids = list(files_to_update.keys())
@@ -108,6 +116,9 @@ def refine_file_in_index(collection: Any, file_path: str, content: str):
     Refines the index for a single file by replacing its coarse chunk
     with fine-grained, AST-based chunks.
     """
+    if not collection:
+        return
+    
     # 1. Delete the old coarse chunk, which used the file_path as its ID.
     collection.delete(ids=[file_path])
 
@@ -139,7 +150,7 @@ def delete_from_index(collection: Any, deleted_files: List[str]):
     Deletes all chunks associated with a list of file paths from the index.
     This handles both coarse (id=file_path) and fine-grained chunks.
     """
-    if not deleted_files:
+    if not collection or not deleted_files:
         return
     collection.delete(where={"file_path": {"$in": deleted_files}})
 
@@ -163,7 +174,7 @@ def query_index(
         A list of VectorIndexResult objects. If filtering by `min_relevance` yields no results,
         it falls back to returning the top 10 most relevant chunks.
     """
-    if not query_text:
+    if not collection or not query_text:
         return []
 
     results = collection.query(
